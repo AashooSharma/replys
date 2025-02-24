@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech Assistant</title>
+    <style>
+        /* Base styles for body */
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-color: #121212;
+            color: #00ff99;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-image: linear-gradient(135deg, #1a1a1a, #0b0b0b);
+            color: #00ff99;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #00ff99;
+            text-shadow: 0 0 5px #00ff99, 0 0 10px #00ff99;
+        }
+
+        /* Buttons styling */
+        button {
+            padding: 15px 30px;
+            font-size: 1.2em;
+            background-color: #00ff99;
+            color: #121212;
+            border: 2px solid #00ff99;
+            border-radius: 50px;
+            margin: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #121212;
+            color: #00ff99;
+            border: 2px solid #00ff99;
+            transform: scale(1.1);
+        }
+
+        button:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        /* Output and input text styling */
+        #output, #inputText {
+            margin-top: 20px;
+            font-size: 1.5em;
+            color: #00ff99;
+            text-shadow: 0 0 5px #00ff99, 0 0 10px #00ff99;
+            word-wrap: break-word;
+            max-width: 90%;
+            margin: 10px auto;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 255, 153, 0.7);
+        }
+
+        /* Text box input styling */
+        input {
+            padding: 10px;
+            font-size: 1.1em;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #00ff99;
+            border: 2px solid #00ff99;
+            border-radius: 10px;
+            margin: 10px;
+        }
+
+        input:focus {
+            outline: none;
+            border: 2px solid #ff0080;
+        }
+
+        /* Glowing effect for speech input/output */
+        .glow {
+            text-shadow: 0 0 5px #00ff99, 0 0 10px #00ff99, 0 0 20px #00ff99, 0 0 40px #ff0080;
+        }
+
+        /* Neon-style border for container */
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            margin-top: 50px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff99;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 153, 0.8);
+        }
+    </style>
+
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="container">
+        <h1>Speech Assistant</h1>
+        <button id="startBtn">Start Listening</button>
+        <button id="stopBtn" disabled>Stop Listening</button>
+        <div id="output" class="glow">Output: </div>
+        <div id="inputText" class="glow">Input: </div>
+    </div>
+
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        let isListening = false;
+        let isSpeaking = false;
+        let replyData = [];
+
+        // Timeout for inactivity (seconds)
+        const inactivityTimeout = 5; // Restart if no input is detected for 5 seconds
+        let inactivityTimer;
+
+        // Fetch the reply data from the JSON file
+        fetch('replydata.json')
+            .then(response => response.json())
+            .then(data => {
+                replyData = data.responses;
+            })
+            .catch(err => console.error("Error loading replydata.json:", err));
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            isListening = true;
+            listenToUser();
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            isListening = false;
+            recognition.stop();
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('output').innerText = "Stopped listening.";
+        });
+
+        function listenToUser() {
+            if (isListening && !isSpeaking) {
+                recognition.start();
+                document.getElementById('output').innerText = "Listening...";
+                resetInactivityTimer(); // Reset the inactivity timer each time listening starts
+            }
+        }
+
+        recognition.onresult = function(event) {
+            const finalTranscript = event.results[event.resultIndex][0].transcript.trim();
+            document.getElementById('inputText').innerText = `Input: ${finalTranscript}`;
+
+            // Check if the input is empty (user says nothing)
+            if (finalTranscript === '') {
+                document.getElementById('output').innerText = "I didn't hear anything. Please say something!";
+                resetInactivityTimer(); // Restart the inactivity timer
+                return; // Don't process empty input
+            }
+
+            // Check if the input matches stop keywords
+            const stopKeywords = ["bye", "goodbye", "exit", "quit", "leave", "stop"];
+            if (stopKeywords.some(keyword => finalTranscript.toLowerCase().includes(keyword))) {
+                document.getElementById('stopBtn').click(); // Trigger the stop button
+                return;
+            }
+
+            // Generate a response based on the user's input
+            const response = getResponse(finalTranscript);
+            speak(response);
+        };
+
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error:', event.error);
+        };
+
+        function speak(text) {
+            isSpeaking = true;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.onend = function() {
+                isSpeaking = false;
+                if (isListening) listenToUser(); // Restart listening after speaking
+            };
+            speechSynthesis.speak(utterance);
+        }
+
+        // Function to get a matching reply from the reply data
+        function getResponse(input) {
+            for (let i = 0; i < replyData.length; i++) {
+                if (input.toLowerCase().includes(replyData[i].input.toLowerCase())) {
+                    return replyData[i].reply;
+                }
+            }
+            return "Sorry, I didn't understand that. Can you try again?";
+        }
+
+        // Reset inactivity timer
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(() => {
+                if (isListening) {
+                    document.getElementById('output').innerText = "No input detected. Restarting...";
+                    listenToUser(); // Restart listening after inactivity timeout
+                }
+            }, inactivityTimeout * 1000); // Convert to milliseconds
+        }
+
+        // Stop listening if no input detected for a certain time
+        recognition.onend = function() {
+            if (isListening && !isSpeaking) {
+                listenToUser(); // Restart listening after recognition ends
+            }
+        };
+    </script>
+
+</body>
+</html>
