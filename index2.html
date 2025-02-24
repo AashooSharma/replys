@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart LED Control</title>
+    <script type="module">
+        // ✅ Import Firebase SDK
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
+        import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-database.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+
+        // ✅ Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDQ174Dj78oVEvcKaWQD7qSzlPV5wxtq2o",
+            authDomain: "nodemcu-d2c65.firebaseapp.com",
+            databaseURL: "https://nodemcu-d2c65-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "nodemcu-d2c65",
+            storageBucket: "nodemcu-d2c65.firebasestorage.app",
+            messagingSenderId: "56498950363",
+            appId: "1:56498950363:web:c3574df8b4a1d823887cfe",
+            measurementId: "G-HSGWJVSJ1P"
+        };
+
+        // ✅ Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const auth = getAuth();
+
+        // 🔑 Enable Anonymous Authentication
+        signInAnonymously(auth)
+            .then(() => {
+                console.log("✅ Web Page Anonymous Authentication Successful!");
+                updateUI();  // 🔄 Update UI after authentication
+            })
+            .catch((error) => {
+                console.error("❌ Anonymous Authentication Failed:", error.message);
+            });
+
+        // ✅ Function to Read LED Status and Update UI
+        function updateUI() {
+            get(ref(db, "status")).then(snapshot => {
+                if (snapshot.exists()) {
+                    let data = snapshot.val();
+                    document.getElementById("led1").checked = data.LED1 === 1;
+                    document.getElementById("led2").checked = data.LED2 === 1;
+                }
+            }).catch(error => {
+                console.error("❌ Error reading data:", error);
+            });
+        }
+
+        // ✅ Function to Toggle LED Status
+        function toggleLED(led) {
+            let ledRef = ref(db, `device/${led}`);
+            get(ledRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    let newState = snapshot.val() === 1 ? 0 : 1;
+                    
+                    set(ledRef, newState)
+                        .then(() => console.log(`✅ ${led} Updated in 'device'`))
+                        .catch(error => console.error(`❌ Failed to update ${led} in 'device':`, error));
+
+                    set(ref(db, `status/${led}`), newState)
+                        .then(() => console.log(`✅ ${led} Updated in 'status'`))
+                        .catch(error => console.error(`❌ Failed to update ${led} in 'status':`, error));
+                }
+            }).catch(error => {
+                console.error("❌ Error updating data:", error);
+            });
+        }
+
+        // ✅ Make toggleLED() Global (Fix for "toggleLED is not defined")
+        window.toggleLED = toggleLED;
+
+        // ✅ Listen for Firebase Changes
+        onValue(ref(db, "status"), (snapshot) => {
+            if (snapshot.exists()) {
+                let data = snapshot.val();
+                document.getElementById("led1").checked = data.LED1 === 1;
+                document.getElementById("led2").checked = data.LED2 === 1;
+            }
+        });
+
+        // ✅ Ensure UI is Updated on Page Load
+        window.onload = updateUI;
+
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #121212;
+            color: white;
+            padding: 20px;
+        }
+
+        .switch {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 15px;
+        }
+
+        .switch input {
+            display: none;
+        }
+
+        .switch label {
+            display: block;
+            width: 60px;
+            height: 30px;
+            background: #777;
+            border-radius: 15px;
+            position: relative;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .switch label::before {
+            content: "";
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: 0.3s;
+        }
+
+        .switch input:checked+label {
+            background: #00c853;
+        }
+
+        .switch input:checked+label::before {
+            transform: translateX(30px);
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Smart LED Control</h2>
+
+    <div class="switch">
+        <input type="checkbox" id="led1" onchange="toggleLED('LED1')">
+        <label for="led1"></label>
+        <span>LED 1</span>
+    </div>
+
+    <div class="switch">
+        <input type="checkbox" id="led2" onchange="toggleLED('LED2')">
+        <label for="led2"></label>
+        <span>LED 2</span>
+    </div>
+</body>
+
+</html>
